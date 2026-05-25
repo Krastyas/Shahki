@@ -310,6 +310,103 @@ namespace ArrayPictureBox {
         }
 #pragma endregion
     private:
+
+    // ????????????????????????????????????????????????????????????????
+    // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ УСТРАНЕНИЯ ДУБЛИРОВАНИЯ
+    // ????????????????????????????????????????????????????????????????
+
+    void loadBitmaps() {
+        blackCasualBmp = gcnew Bitmap("..//черная шашка.png");
+        whiteCasualBmp = gcnew Bitmap("..//белая шашка.png");
+        blackQueenBmp = gcnew Bitmap("..//черная дамка.png");
+        whiteQueenBmp = gcnew Bitmap("..//белая дамка.png");
+    }
+
+    void createVisualBoard() {
+        pb = gcnew array<PictureBox^>(64);
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                pb[i * 8 + j] = gcnew PictureBox();
+                pb[i * 8 + j]->Left = x0 + j * size;
+                pb[i * 8 + j]->Top = y0 + i * size;
+                pb[i * 8 + j]->Width = size;
+                pb[i * 8 + j]->Height = size;
+                pb[i * 8 + j]->SizeMode = PictureBoxSizeMode::StretchImage;
+                pb[i * 8 + j]->TabStop = false;
+                pb[i * 8 + j]->BackColor = getCellColor(i, j);
+                pb[i * 8 + j]->Click += gcnew System::EventHandler(this, &MyForm::pictureBox_Click);
+                pb[i * 8 + j]->Tag = i * 8 + j;
+                this->Controls->Add(pb[i * 8 + j]);
+            }
+        }
+    }
+
+    void clearPictureBoxes() {
+        if (pb != nullptr) {
+            for (int i = 0; i < 64; i++) {
+                if (pb[i] != nullptr) {
+                    this->Controls->Remove(pb[i]);
+                    delete pb[i];
+                }
+            }
+            delete pb;
+            pb = nullptr;
+        }
+    }
+
+    System::Drawing::Color getCellColor(int row, int col) {
+        return ((row + col) % 2 == 0) ? 
+            System::Drawing::Color::LightGray : 
+            System::Drawing::Color::DarkGray;
+    }
+
+    void deselectPiece() {
+        clearValidMoves();
+        int idx = selectedX * 8 + selectedY;
+        if (idx >= 0 && idx < 64) {
+            pb[idx]->BackColor = getCellColor(selectedX, selectedY);
+        }
+        selected = false;
+        selectedX = -1;
+        selectedY = -1;
+    }
+
+    void executeAIMove(color aiColor) {
+        this->Enabled = false;
+        Application::DoEvents();
+        System::Threading::Thread::Sleep(500);
+
+        moveInfo aiMove;
+        getBestMove(*gameBoard, aiMove, aiColor, aiDifficulty);
+        makeMove(*gameBoard, aiMove);
+        updateBoard();
+        updateStatus();
+
+        // Продолжаем рубку если есть обязательная рубка
+        while (!endGame(*gameBoard) && gameBoard->currentColor == aiColor && gameBoard->mustCapt) {
+            System::Threading::Thread::Sleep(300);
+            moveInfo aiContinueMove;
+            getBestMove(*gameBoard, aiContinueMove, aiColor, aiDifficulty);
+            makeMove(*gameBoard, aiContinueMove);
+            updateBoard();
+            updateStatus();
+        }
+
+        this->Enabled = true;
+    }
+
+    void showGameBoard() {
+        this->easyButton->Visible = false;
+        this->normalButton->Visible = false;
+        this->hardButton->Visible = false;
+        this->colorLabel->Visible = false;
+        this->blackColorButton->Visible = false;
+        this->whiteColorButton->Visible = false;
+        this->loadInitialButton->Visible = false;
+        this->saveButton->Visible = true;
+        this->menuButton->Visible = true;
+    }
+
     System::Void button1_Click(System::Object^ sender, System::EventArgs^ e) {
         this->button1->Visible = false;
         this->easyButton->Visible = true;
@@ -355,55 +452,17 @@ namespace ArrayPictureBox {
     }
 
     void startNewGame() {
-        this->easyButton->Visible = false;
-        this->normalButton->Visible = false;
-        this->hardButton->Visible = false;
-        this->colorLabel->Visible = false;
-        this->blackColorButton->Visible = false;
-        this->whiteColorButton->Visible = false;
-        this->loadInitialButton->Visible = false;
-        this->statusLabel->Text = L"";
-        this->saveButton->Visible = true;
-        this->menuButton->Visible = true;
-
         // Инициализируем доску
         if (gameBoard != nullptr)
             delete gameBoard;
         gameBoard = new desk();
         newGame(*gameBoard);
-        // Черные всегда ходят первыми
         gameBoard->currentColor = black;
 
-        pb = gcnew array<PictureBox^>(64);
-
-        // Загружаем изображения шашек БЕЗ try/catch
-        blackCasualBmp = gcnew Bitmap("..//черная шашка.png");
-        whiteCasualBmp = gcnew Bitmap("..//белая шашка.png");
-        blackQueenBmp = gcnew Bitmap("..//черная дамка.png");
-        whiteQueenBmp = gcnew Bitmap("..//белая дамка.png");
-
-        // Создаем доску 8x8
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
-                pb[i * 8 + j] = gcnew PictureBox();
-                pb[i * 8 + j]->Left = x0 + j * size;
-                pb[i * 8 + j]->Top = y0 + i * size;
-                pb[i * 8 + j]->Width = size;
-                pb[i * 8 + j]->Height = size;
-                pb[i * 8 + j]->SizeMode = PictureBoxSizeMode::StretchImage;
-                pb[i * 8 + j]->TabStop = false;
-
-                if ((i + j) % 2 == 0)
-                    pb[i * 8 + j]->BackColor = System::Drawing::Color::LightGray;
-                else
-                    pb[i * 8 + j]->BackColor = System::Drawing::Color::DarkGray;
-
-                pb[i * 8 + j]->Click += gcnew System::EventHandler(this, &MyForm::pictureBox_Click);
-                pb[i * 8 + j]->Tag = i * 8 + j;
-                this->Controls->Add(pb[i * 8 + j]);
-            }
-        }
-
+        // Загружаем изображения и создаём визуальную доску
+        loadBitmaps();
+        showGameBoard();
+        createVisualBoard();
 
         // Отображаем шашки на доске
         updateBoard();
@@ -412,33 +471,11 @@ namespace ArrayPictureBox {
         selectedY = -1;
         updateStatus();
 
-        // Черные ходят первыми. Если человек выбрал белые, то ИИ ходит первым (за черных)
+        // Черные ходят первыми. Если человек выбрал белые, то ИИ ходит первым
         if (isWhiteHuman && gameBoard->currentColor == black) {
-            this->Enabled = false;
-            Application::DoEvents();
-            System::Threading::Thread::Sleep(500);
-
-            moveInfo aiMove;
-            getBestMove(*gameBoard, aiMove, black, aiDifficulty);
-            makeMove(*gameBoard, aiMove);
-            updateBoard();
-            updateStatus();
-
-            // Продолжаем рубку если есть обязательная рубка
-            while (!endGame(*gameBoard) && gameBoard->currentColor == black && gameBoard->mustCapt) {
-                System::Threading::Thread::Sleep(300);
-
-                moveInfo aiContinueMove;
-                getBestMove(*gameBoard, aiContinueMove, black, aiDifficulty);
-                makeMove(*gameBoard, aiContinueMove);
-                updateBoard();
-                updateStatus();
-            }
-
-            this->Enabled = true;
+            executeAIMove(black);
         }
 
-        // ГАРАНТИРУЕМ, что форма включена всегда
         this->Enabled = true;
     }
 
@@ -569,8 +606,6 @@ namespace ArrayPictureBox {
                     selectedX = row;
                     selectedY = col;
                     pictureBox->BackColor = System::Drawing::Color::Cyan;
-
-                    // Показываем допустимые ходы
                     showValidMoves(row, col);
                 }
             }
@@ -579,15 +614,7 @@ namespace ArrayPictureBox {
             // Попытка сделать ход
             if (selectedX == row && selectedY == col) {
                 // Отмена выбора
-                clearValidMoves();
-                int idx = selectedX * 8 + selectedY;
-                if ((selectedX + selectedY) % 2 == 0)
-                    pb[idx]->BackColor = System::Drawing::Color::LightGray;
-                else
-                    pb[idx]->BackColor = System::Drawing::Color::DarkGray;
-                selected = false;
-                selectedX = -1;
-                selectedY = -1;
+                deselectPiece();
             }
             else {
                 // Попытка хода
@@ -599,60 +626,19 @@ namespace ArrayPictureBox {
                 move.result = rv;
                 if (rv != 0) {
                     makeMove(*gameBoard, move);
-                    clearValidMoves();
-
-                    // Восстанавливаем цвет старой клетки
-                    int idx = selectedX * 8 + selectedY;
-                    if ((selectedX + selectedY) % 2 == 0)
-                        pb[idx]->BackColor = System::Drawing::Color::LightGray;
-                    else
-                        pb[idx]->BackColor = System::Drawing::Color::DarkGray;
-
-                    selected = false;
-                    selectedX = -1;
-                    selectedY = -1;
+                    deselectPiece();
                     updateBoard();
                     updateStatus();
 
                     // Ход ИИ (противоположный цвет)
                     color aiColor = isWhiteHuman ? black : white;
                     if (!endGame(*gameBoard) && gameBoard->currentColor == aiColor) {
-                        // Ход ИИ с циклом для обязательных рубок
-                        this->Enabled = false;
-                        Application::DoEvents();
-                        System::Threading::Thread::Sleep(500);
-
-                        moveInfo aiMove;
-                        getBestMove(*gameBoard, aiMove, aiColor, aiDifficulty);
-                        makeMove(*gameBoard, aiMove);
-                        updateBoard();
-                        updateStatus();
-
-                        // Продолжаем рубку если есть обязательная рубка
-                        while (!endGame(*gameBoard) && gameBoard->currentColor == aiColor && gameBoard->mustCapt) {
-                            System::Threading::Thread::Sleep(300);
-
-                            moveInfo aiContinueMove;
-                            getBestMove(*gameBoard, aiContinueMove, aiColor, aiDifficulty);
-                            makeMove(*gameBoard, aiContinueMove);
-                            updateBoard();
-                            updateStatus();
-                        }
-
-                        this->Enabled = true;
+                        executeAIMove(aiColor);
                     }
                 }
                 else {
                     // Ход невалиден - пытаемся выбрать другую шашку
-                    clearValidMoves();
-                    // Восстанавливаем цвет предыдущей выбранной клетки (используем правильный индекс)
-                    int prevIdx = selectedX * 8 + selectedY;
-                    if (prevIdx >= 0 && prevIdx < 64) {
-                        if ((selectedX + selectedY) % 2 == 0)
-                            pb[prevIdx]->BackColor = System::Drawing::Color::LightGray;
-                        else
-                            pb[prevIdx]->BackColor = System::Drawing::Color::DarkGray;
-                    }
+                    deselectPiece();
 
                     // Выбираем новую шашку если там есть своя
                     color humanColor = isWhiteHuman ? white : black;
@@ -664,11 +650,6 @@ namespace ArrayPictureBox {
                             pictureBox->BackColor = System::Drawing::Color::Cyan;
                             showValidMoves(row, col);
                         }
-                    }
-                    else {
-                        selected = false;
-                        selectedX = -1;
-                        selectedY = -1;
                     }
                 }
             }
@@ -700,19 +681,9 @@ namespace ArrayPictureBox {
         this->saveButton->Visible = false;
         this->menuButton->Visible = false;
 
-        // Очищаем доску
-        if (pb != nullptr) {
-            for (int i = 0; i < 64; i++) {
-                if (pb[i] != nullptr) {
-                    this->Controls->Remove(pb[i]);
-                    delete pb[i];
-                }
-            }
-            delete pb;
-            pb = nullptr;
-        }
+        // Очищаем доску и удаляем из памяти
+        clearPictureBoxes();
 
-        // Удаляем доску из памяти
         if (gameBoard != nullptr) {
             delete gameBoard;
             gameBoard = nullptr;
@@ -771,7 +742,7 @@ namespace ArrayPictureBox {
     }
 
     void setupLoadedGameBoard() {
-        // Скрываем стартовые элементы
+        // Скрываем стартовые элементы и показываем игру
         this->button1->Visible = false;
         this->easyButton->Visible = false;
         this->normalButton->Visible = false;
@@ -784,43 +755,11 @@ namespace ArrayPictureBox {
         this->menuButton->Visible = true;
 
         // Очищаем старую визуальную доску
-        if (pb != nullptr) {
-            for (int i = 0; i < 64; i++) {
-                if (pb[i] != nullptr) {
-                    this->Controls->Remove(pb[i]);
-                    delete pb[i];
-                }
-            }
-        }
+        clearPictureBoxes();
 
-        // Загружаем изображения
-        if (blackCasualBmp == nullptr) blackCasualBmp = gcnew Bitmap("..//черная шашка.png");
-        if (whiteCasualBmp == nullptr) whiteCasualBmp = gcnew Bitmap("..//белая шашка.png");
-        if (blackQueenBmp == nullptr) blackQueenBmp = gcnew Bitmap("..//черная дамка.png");
-        if (whiteQueenBmp == nullptr) whiteQueenBmp = gcnew Bitmap("..//белая дамка.png");
-
-        // Пересоздаем визуальную доску
-        pb = gcnew array<PictureBox^>(64);
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
-                pb[i * 8 + j] = gcnew PictureBox();
-                pb[i * 8 + j]->Left = x0 + j * size;
-                pb[i * 8 + j]->Top = y0 + i * size;
-                pb[i * 8 + j]->Width = size;
-                pb[i * 8 + j]->Height = size;
-                pb[i * 8 + j]->SizeMode = PictureBoxSizeMode::StretchImage;
-                pb[i * 8 + j]->TabStop = false;
-
-                if ((i + j) % 2 == 0)
-                    pb[i * 8 + j]->BackColor = System::Drawing::Color::LightGray;
-                else
-                    pb[i * 8 + j]->BackColor = System::Drawing::Color::DarkGray;
-
-                pb[i * 8 + j]->Click += gcnew System::EventHandler(this, &MyForm::pictureBox_Click);
-                pb[i * 8 + j]->Tag = i * 8 + j;
-                this->Controls->Add(pb[i * 8 + j]);
-            }
-        }
+        // Загружаем изображения и создаём новую доску
+        loadBitmaps();
+        createVisualBoard();
 
         updateBoard();
         selected = false;
@@ -831,31 +770,9 @@ namespace ArrayPictureBox {
         // Если ход ИИ, делаем его ход
         color aiColor = isWhiteHuman ? black : white;
         if (!endGame(*gameBoard) && gameBoard->currentColor == aiColor) {
-            this->Enabled = false;
-            Application::DoEvents();
-            System::Threading::Thread::Sleep(500);
-
-            moveInfo aiMove;
-            getBestMove(*gameBoard, aiMove, aiColor, aiDifficulty);
-            makeMove(*gameBoard, aiMove);
-            updateBoard();
-            updateStatus();
-
-            // Продолжаем рубку если есть обязательная рубка
-            while (!endGame(*gameBoard) && gameBoard->currentColor == aiColor && gameBoard->mustCapt) {
-                System::Threading::Thread::Sleep(300);
-
-                moveInfo aiContinueMove;
-                getBestMove(*gameBoard, aiContinueMove, aiColor, aiDifficulty);
-                makeMove(*gameBoard, aiContinueMove);
-                updateBoard();
-                updateStatus();
-            }
-
-            this->Enabled = true;
+            executeAIMove(aiColor);
         }
         else {
-            // Форма должна быть включена если это ход человека
             this->Enabled = true;
         }
     }
